@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MixPro AI Color Station</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>MixPro AI Color Station</h1>
+    <p class="muted">เลือกโหมดการวิเคราะห์</p>
+    <div class="grid">
+      <a class="card" href="/app#mode=camera">
+        <h3>1. การวิเคราะห์จากกล้องโทรศัพท์</h3>
+        <p>ขอสิทธิ์ใช้กล้อง → แสดงตัวอย่างภาพ → ถ่าย → ยืนยัน/ถ่ายใหม่</p>
+      </a>
+      <a class="card" href="/app#mode=file">
+        <h3>2. การวิเคราะห์จากไฟล์</h3>
+        <p>อัปโหลดภาพจากแกลเลอรีหรือไฟล์ภายนอก</p>
+      </a>
+      <a class="card" href="/app#mode=external">
+        <h3>3. การวิเคราะห์จากกล้องภายนอก (ESP32)</h3>
+        <p>เชื่อมต่อสตรีม/สแนปช็อตจากอุปกรณ์ภายนอก (Wi‑Fi)</p>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

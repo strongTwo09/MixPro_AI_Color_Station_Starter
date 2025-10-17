@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MixPro AI Color Station</title>
+  <style>
+    :root { --bg:#0f172a; --card:#111827; --muted:#94a3b8; --text:#e5e7eb; --accent:#22c55e; --warn:#f59e0b; }
+    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial;color:var(--text);background:linear-gradient(180deg,#0b1220,#0f172a);} 
+    .wrap{max-width:1200px;margin:24px auto;padding:0 16px}
+    .grid{display:grid;grid-template-columns:360px 1fr;gap:16px}
+    .card{background:var(--card);border:1px solid #1f2937;border-radius:16px;padding:16px}
+    h1{font-size:22px;margin:0 0 8px}
+    h2{font-size:16px;margin:16px 0 8px;color:#cbd5e1}
+    label{display:block;font-size:13px;margin:8px 0 4px;color:var(--muted)}
+    input[type=file],select,button{width:100%;padding:10px;border-radius:10px;border:1px solid #374151;background:#0b1220;color:var(--text)}
+    button{cursor:pointer;background:#1f2937;border:1px solid #334155}
+    button.primary{background:linear-gradient(90deg,#22c55e,#16a34a);border:none}
+    button.ghost{background:#0b1220;border:1px dashed #334155}
+    .row{display:flex;gap:8px;align-items:center}
+    .row>*{flex:1}
+    .muted{color:var(--muted);font-size:12px}
+    .pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#0b1220;border:1px solid #334155;font-size:12px;color:#cbd5e1}
+    .swatch{width:28px;height:28px;border-radius:6px;border:1px solid #334155;display:inline-block;vertical-align:middle}
+    .kv{display:grid;grid-template-columns:140px 1fr;gap:6px;align-items:center}
+    canvas{max-width:100%;background:#000;border-radius:12px;border:1px solid #1f2937}
+    .flex{display:flex;gap:12px;align-items:center}
+    .footer{opacity:.7;font-size:12px;margin-top:8px}
+    details{border-top:1px solid #1f2937;padding-top:10px;margin-top:10px}
+    code{background:#0b1220;border:1px solid #334155;padding:2px 6px;border-radius:6px}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1> <img src="img/logo.png" width="5%" > MixPro AI Color Station</h1>
+  <p class="muted">อัปโหลดรูป/ถ่ายรูป ➜ เลือกพื้นที่สีอ้างอิง ➜ (ตัวเลือก) คลิกเทียบจุดเทาเพื่อ White Balance ➜ ระบบจะคำนวณค่า <b>CIELAB</b> และแนะนำสัดส่วนผสมสี <b>CMYKW</b> แบบเชิงเส้น (ต้นแบบวิจัย/ฝึกสอน) <span class="pill">*ยังไม่รองรับเมทัลลิก/เพิร์ล*</span></p>
+
+  <div class="grid">
+    <!-- Sidebar controls -->
+    <div class="card">
+      <h2>1) นำเข้าภาพ</h2>
+      <label>อัปโหลดภาพ</label>
+      <input id="file" type="file" accept="image/*" />
+      <div class="row" style="margin-top:8px">
+        <button id="btnCamera" class="ghost">📷 ใช้กล้อง (ถ้ามี)</button>
+        <button id="btnReset">ล้างค่า</button>
+      </div>
+      
+      <h2>2) White Balance (ทางเลือก)</h2>
+      <p class="muted">คลิกที่บริเวณที่ควรเป็นโทนเทา/ขาวบนภาพ 1 ครั้ง เพื่อถ่วงสมดุลสีโดยอัตโนมัติ (Gray World)</p>
+      <div class="row">
+        <button id="btnWB" class="ghost">ปรับ WB จากจุดที่คลิกล่าสุด</button>
+        <button id="btnWBReset">ยกเลิก WB</button>
+      </div>
+
+      <h2>3) เลือกพื้นที่วัดสี</h2>
+      <p class="muted">ลากเมาส์บนภาพเพื่อสร้างกรอบสี่เหลี่ยม ระบบจะคำนวณค่าสีเฉลี่ยภายในกรอบ</p>
+      <div class="kv" id="kvColors"></div>
+
+      <h2>4) แปลงเป็นสัดส่วนผสมสี</h2>
+      <label>ฐานผสม (ต้นแบบ): <span class="pill">C</span> <span class="pill">M</span> <span class="pill">Y</span> <span class="pill">K</span> <span class="pill">White</span></label>
+      <div class="row">
+        <button id="btnSolve" class="primary">คำนวณสัดส่วน (CMYKW)</button>
+        <button id="btnCopy">คัดลอกผลลัพธ์</button>
+      </div>
+      <div id="mixOut" style="margin-top:10px"></div>
+
+      <details>
+        <summary>ตัวเลือกขั้นสูง</summary>
+        <label>อัลกอริทึม: Projected Gradient (RGB เชิงเส้น) ➜ ปรับให้บวกและ Normalize</label>
+        <label>ค่า Iterations</label>
+        <input id="iters" type="number" min="50" max="4000" step="50" value="800" />
+        <label>Learning rate</label>
+        <input id="lr" type="number" step="0.001" value="0.08" />
+      </details>
+
+      <p class="footer">หมายเหตุ: ระบบนี้เป็น <b>Prototype เพื่อการศึกษา</b> — ในงานจริงควรใช้ <b>Spectrophotometer</b> และฐานโทนเนอร์ของผู้ผลิตสีรถ พร้อมค่าสูตรตามน้ำหนัก (g) และตรวจสอบหลายมุมมองแสง</p>
+    </div>
+
+    <!-- Canvas / Preview -->
+    <div class="card">
+      <h2>ภาพตัวอย่างและพื้นที่เลือก</h2>
+      <canvas id="cv" width="960" height="600"></canvas>
+      <div class="flex">
+        <div id="swatch" class="swatch"></div>
+        <div class="muted">สีเฉลี่ยในกรอบ ➜ <span id="rgbText">—</span> | LAB: <span id="labText">—</span> | ΔE เทียบสังเคราะห์: <span id="deltaText">—</span></div>
+      </div>
+    </div>
+  </div>
+  
+</div>
+
+
+
+
+<script>
+// ----------------------------- Utilities: Color Space -----------------------------
+// sRGB (0..255) -> Linear RGB (0..1)
+function srgbToLinear(c){
+  c = c/255;
+  return c <= 0.04045 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4);
+}
+function linearToSrgb(c){
+  c = Math.max(0, Math.min(1, c));
+  return c <= 0.0031308 ? (c*12.92)*255 : (1.055*Math.pow(c,1/2.4)-0.055)*255;
+}
+// Linear RGB (D65) -> XYZ
+function rgb2xyz(r,g,b){
+  // sRGB D65 matrix
+  const X = r*0.4124564 + g*0.3575761 + b*0.1804375;
+  const Y = r*0.2126729 + g*0.7151522 + b*0.0721750;
+  const Z = r*0.0193339 + g*0.1191920 + b*0.9503041;
+  return {X,Y,Z};
+}
+// XYZ -> Lab (D65)
+function xyz2lab(X,Y,Z){
+  // D65 reference white
+  const Xn=0.95047, Yn=1.00000, Zn=1.08883;
+  function f(t){ return t>0.008856 ? Math.cbrt(t) : (7.787*t + 16/116); }
+  const fx=f(X/Xn), fy=f(Y/Yn), fz=f(Z/Zn);
+  const L=116*fy-16, a=500*(fx-fy), b=200*(fy-fz);
+  return {L,a,b};
+}
+// Delta E (CIE76)
+function deltaE76(lab1, lab2){
+  const dL = lab1.L-lab2.L, da = lab1.a-lab2.a, db = lab1.b-lab2.b;
+  return Math.sqrt(dL*dL + da*da + db*db);
+}
+
+// ----------------------------- Canvas / Image -----------------------------
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d', { willReadFrequently:true });
+let img = new Image();
+let wbGain = {r:1,g:1,b:1}; // White balance gain per channel
+let drag = false, sel = null; // selection rect
+let lastClick = {x:0,y:0};
+
+function drawImageScaled(image){
+  // Fit image into canvas while preserving aspect
+  const cw=cv.width, ch=cv.height;
+  ctx.clearRect(0,0,cw,ch);
+  const iw=image.width, ih=image.height;
+  const scale=Math.min(cw/iw, ch/ih);
+  const w=iw*scale, h=ih*scale, x=(cw-w)/2, y=(ch-h)/2;
+  ctx.drawImage(image, x, y, w, h);
+}
+
+function applyWB(r,g,b){
+  return { r: Math.min(255, r*wbGain.r), g: Math.min(255, g*wbGain.g), b: Math.min(255, b*wbGain.b) };
+}
+
+function avgInRect(r){
+  const {x,y,w,h} = r; if(w<=0||h<=0) return null;
+  const imgData = ctx.getImageData(x,y,w,h).data;
+  let R=0,G=0,B=0,count=0;
+  for(let i=0;i<imgData.length;i+=4){
+    const rr=imgData[i], gg=imgData[i+1], bb=imgData[i+2];
+    const wb = applyWB(rr,gg,bb);
+    R+=wb.r; G+=wb.g; B+=wb.b; count++;
+  }
+  return {r:R/count, g:G/count, b:B/count};
+}
+
+function showSwatch(rgb){
+  const sw = document.getElementById('swatch');
+  sw.style.background = `rgb(${rgb.r.toFixed(0)},${rgb.g.toFixed(0)},${rgb.b.toFixed(0)})`;
+}
+
+function toLab(rgb){
+  const rl=srgbToLinear(rgb.r), gl=srgbToLinear(rgb.g), bl=srgbToLinear(rgb.b);
+  const {X,Y,Z}=rgb2xyz(rl,gl,bl);
+  return xyz2lab(X,Y,Z);
+}
+
+function updateReadout(rgb){
+  const lab = toLab(rgb);
+  document.getElementById('rgbText').textContent = `RGB ${rgb.r.toFixed(0)}, ${rgb.g.toFixed(0)}, ${rgb.b.toFixed(0)}`;
+  document.getElementById('labText').textContent = `${lab.L.toFixed(1)}, ${lab.a.toFixed(1)}, ${lab.b.toFixed(1)}`;
+  showSwatch(rgb);
+  return lab;
+}
+
+// ----------------------------- Mix Solver (CMYKW) -----------------------------
+// Toner basis in linear RGB (very simplified demo — real systems use measured spectral data)
+const BASIS = {
+  C:[0,0.6,0.8],   // Cyan (deep green-blue)
+  M:[0.75,0,0.55], // Magenta
+  Y:[0.95,0.95,0], // Yellow
+  K:[0,0,0],       // Black
+  W:[1,1,1]        // White
+};
+const KEYS = ['C','M','Y','K','W'];
+
+function rgb8ToLinearVec(rgb){
+  return [srgbToLinear(rgb.r), srgbToLinear(rgb.g), srgbToLinear(rgb.b)];
+}
+
+function lerpBasis(w){
+  // mix = sum_i w_i * basis_i ; w projected on simplex (sum=1, w>=0)
+  let x=0,y=0,z=0;
+  for(let i=0;i<KEYS.length;i++){
+    const b=BASIS[KEYS[i]]; x+=w[i]*b[0]; y+=w[i]*b[1]; z+=w[i]*b[2];
+  }
+  return [x,y,z];
+}
+
+function projectSimplex(v){
+  // Project onto simplex: v>=0, sum=1  (Michelot / Condat)
+  const n=v.length; let u=Array.from(v).sort((a,b)=>b-a); let css=0, rho=-1;
+  for(let i=0;i<n;i++){ css+=u[i]; const t=(css-1)/(i+1); if(u[i]-t>0) rho=i; }
+  const theta=(u.slice(0,rho+1).reduce((a,b)=>a+b,0)-1)/(rho+1);
+  const w=v.map(x=>Math.max(0,x-theta));
+  // numerical safety normalize
+  const s=w.reduce((a,b)=>a+b,0); return w.map(x=>x/s);
+}
+
+function solveMix(targetRgb, iters=800, lr=0.08){
+  const t = rgb8ToLinearVec(targetRgb);
+  let w = projectSimplex([0.2,0.2,0.2,0.2,0.2]); // start equal
+  for(let k=0;k<iters;k++){
+    const m = lerpBasis(w);
+    // gradient of 1/2||m-t||^2 wrt w_j is (m-t)·basis_j
+    const g=[0,0,0,0,0];
+    const diff=[m[0]-t[0], m[1]-t[1], m[2]-t[2]];
+    for(let j=0;j<KEYS.length;j++){
+      const b=BASIS[KEYS[j]]; g[j]=diff[0]*b[0]+diff[1]*b[1]+diff[2]*b[2];
+    }
+    // gradient step
+    w = w.map((wj,j)=>wj - lr*g[j]);
+    // project back
+    w = projectSimplex(w);
+  }
+  // Resulting color and deltaE
+  const m = lerpBasis(w);
+  const rgbApprox = { r: linearToSrgb(m[0]), g: linearToSrgb(m[1]), b: linearToSrgb(m[2]) };
+  const labTarget = toLab(targetRgb); const labApprox = toLab(rgbApprox);
+  return { w, rgbApprox, dE: deltaE76(labTarget, labApprox) };
+}
+
+function fmtPct(x){ return (x*100).toFixed(1)+"%"; }
+
+// ----------------------------- UI Wiring -----------------------------
+const file = document.getElementById('file');
+file.addEventListener('change', e=>{
+  const f=e.target.files[0]; if(!f) return; const url=URL.createObjectURL(f);
+  img.onload=()=>{ drawImageScaled(img); sel=null; wbGain={r:1,g:1,b:1}; updateKV(); };
+  img.src=url;
+});
+
+document.getElementById('btnCamera').onclick=async()=>{
+  // Best-effort: Use file input with capture attribute dynamically
+  file.setAttribute('capture','environment'); file.click();
+};
+
+document.getElementById('btnReset').onclick=()=>{ ctx.clearRect(0,0,cv.width,cv.height); sel=null; wbGain={r:1,g:1,b:1}; if(img.src) drawImageScaled(img); updateKV(); document.getElementById('mixOut').innerHTML=''; };
+
+document.getElementById('btnWB').onclick=()=>{
+  if(!lastClick) return;
+  const p=ctx.getImageData(lastClick.x,lastClick.y,1,1).data;
+  // target neutral gray => equalize channels by gain to make mean equal
+  const mean=(p[0]+p[1]+p[2])/3;
+  wbGain={ r: mean/Math.max(1,p[0]), g: mean/Math.max(1,p[1]), b: mean/Math.max(1,p[2]) };
+  if(img.src) drawImageScaled(img);
+  if(sel){ drawSelection(); updateKV(); }
+};
+
+document.getElementById('btnWBReset').onclick=()=>{ wbGain={r:1,g:1,b:1}; if(img.src) drawImageScaled(img); if(sel){ drawSelection(); updateKV(); } };
+
+cv.addEventListener('mousedown', e=>{
+  const rect=cv.getBoundingClientRect(); const x=e.clientX-rect.left, y=e.clientY-rect.top; drag=true; sel={x,y,w:0,h:0}; lastClick={x:Math.round(x),y:Math.round(y)}; });
+cv.addEventListener('mousemove', e=>{
+  if(!drag) return; const rect=cv.getBoundingClientRect(); const x=e.clientX-rect.left, y=e.clientY-rect.top; sel.w=x-sel.x; sel.h=y-sel.y; drawImageScaled(img); drawSelection(); });
+cv.addEventListener('mouseup', ()=>{ drag=false; updateKV(); });
+
+function drawSelection(){
+  if(!sel) return; ctx.save(); ctx.strokeStyle='#22c55e'; ctx.lineWidth=2; ctx.setLineDash([6,6]);
+  ctx.strokeRect(sel.x, sel.y, sel.w, sel.h); ctx.restore();
+}
+
+function updateKV(){
+  const kv=document.getElementById('kvColors'); kv.innerHTML='';
+  if(!sel || Math.abs(sel.w)<2 || Math.abs(sel.h)<2){ document.getElementById('rgbText').textContent='—'; document.getElementById('labText').textContent='—'; document.getElementById('deltaText').textContent='—'; return; }
+  const norm={x:Math.round(Math.min(sel.x, sel.x+sel.w)), y:Math.round(Math.min(sel.y, sel.y+sel.h))};
+  const r={x:norm.x, y:norm.y, w:Math.round(Math.abs(sel.w)), h:Math.round(Math.abs(sel.h))};
+  const rgb = avgInRect(r); const lab = updateReadout(rgb);
+  // small tiles
+  const tile = (name,val)=>`<div>${name}</div><div><code>${val}</code></div>`;
+  kv.innerHTML = [
+    tile('ตำแหน่งกรอบ', `${r.x},${r.y} · ${r.w}×${r.h}px`),
+    tile('RGB (8-bit)', `${rgb.r.toFixed(0)}, ${rgb.g.toFixed(0)}, ${rgb.b.toFixed(0)}`),
+    tile('Linear RGB', `${srgbToLinear(rgb.r).toFixed(3)}, ${srgbToLinear(rgb.g).toFixed(3)}, ${srgbToLinear(rgb.b).toFixed(3)}`),
+    tile('Lab (D65)', `${lab.L.toFixed(2)}, ${lab.a.toFixed(2)}, ${lab.b.toFixed(2)}`)
+  ].join('');
+}
+
+// Solve button
+const mixOut = document.getElementById('mixOut');
+document.getElementById('btnSolve').onclick=()=>{
+  if(!sel){ alert('โปรดลากกรอบเลือกพื้นที่สีบนภาพก่อน'); return; }
+  const r={ x:Math.round(Math.min(sel.x, sel.x+sel.w)), y:Math.round(Math.min(sel.y, sel.y+sel.h)), w:Math.round(Math.abs(sel.w)), h:Math.round(Math.abs(sel.h)) };
+  const rgb = avgInRect(r);
+  const iters=parseInt(document.getElementById('iters').value||800,10);
+  const lr=parseFloat(document.getElementById('lr').value||0.08);
+  const res = solveMix(rgb, iters, lr);
+  const rows = KEYS.map((k,i)=>`<tr><td>${k}</td><td>${fmtPct(res.w[i])}</td></tr>`).join('');
+  const approx = `rgb(${res.rgbApprox.r.toFixed(0)}, ${res.rgbApprox.g.toFixed(0)}, ${res.rgbApprox.b.toFixed(0)})`;
+  document.getElementById('deltaText').textContent = res.dE.toFixed(2);
+  mixOut.innerHTML = `
+    <div class="row">
+      <div style="flex:0 0 60px">ผลลัพธ์</div>
+      <div class="swatch" style="background:${approx};border-color:#475569"></div>
+      <div class="muted">Approx • ΔE≈ ${res.dE.toFixed(2)}</div>
+    </div>
+    <table style="width:100%;margin-top:8px;border-collapse:collapse">
+      <thead><tr><th style="text-align:left">Toner</th><th style="text-align:right">สัดส่วน</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <p class="muted">*สัดส่วนเป็นร้อยละของส่วนผสมรวม 100% (ต้นแบบ CMYKW)
+      ในงานจริงควร map ไปยังโทนเนอร์ของระบบสีรถ (PPG/Glasurit/ฯลฯ) และชั่งตามน้ำหนัก (g)</p>
+  `;
+};
+
+document.getElementById('btnCopy').onclick=()=>{
+  const text = mixOut.innerText || '';
+  navigator.clipboard.writeText(text).then(()=>{
+    alert('คัดลอกผลลัพธ์แล้ว');
+  });
+};
+
+// ============ เชื่อม Backend: ส่งภาพไปให้ Flask วิเคราะห์ ============
+async function sendToBackend(fileBlob) {
+  const formData = new FormData();
+  formData.append('file', fileBlob);
+
+  // แจ้งสถานะขณะรอผล
+  document.getElementById('mixOut').innerHTML = '<p class="muted">⏳ กำลังวิเคราะห์ภาพด้วย AI...</p>';
+
+  try {
+    const res = await fetch('/api/upload', { method: 'POST', body: formData });
+    const data = await res.json();
+
+    if (!data || !data.ok) {
+      alert('❌ การวิเคราะห์ล้มเหลว: ' + (data && data.error ? data.error : 'ไม่ทราบสาเหตุ'));
+      return;
+    }
+
+    const a = data.analysis || {};
+    const f = data.formula_match || {};
+    const label = a.color_label || 'Unknown';
+    const conf = a.confidence != null ? (a.confidence * 100).toFixed(1) : '—';
+    const hex = a.dominant_hex || '#808080';
+
+    // แสดงผล AI + สูตรสี (ถ้ามี)
+    let html = `
+      <h3>ผลการวิเคราะห์ AI</h3>
+      <div class="row">
+        <div class="swatch" style="background:${hex};border-color:#475569"></div>
+        <div>สีที่ตรวจจับได้: <b>${label}</b> (${hex}) • ${conf}%</div>
+      </div>
+    `;
+
+    if (f && f.brand) {
+      html += `
+        <h4>สูตรสีใกล้เคียงในฐานข้อมูล</h4>
+        <div class="muted">${f.brand} • ${f.color_name}</div>
+        <table style="width:100%;margin-top:6px;border-collapse:collapse">
+          <thead><tr><th style="text-align:left">แม่สี</th><th style="text-align:right">สัดส่วน (%)</th></tr></thead>
+          <tbody>
+            <tr><td>Red</td><td style="text-align:right">${Number(f.base_red || 0).toFixed(1)}</td></tr>
+            <tr><td>Blue</td><td style="text-align:right">${Number(f.base_blue || 0).toFixed(1)}</td></tr>
+            <tr><td>Yellow</td><td style="text-align:right">${Number(f.base_yellow || 0).toFixed(1)}</td></tr>
+            <tr><td>White</td><td style="text-align:right">${Number(f.base_white || 0).toFixed(1)}</td></tr>
+            <tr><td>Black</td><td style="text-align:right">${Number(f.base_black || 0).toFixed(1)}</td></tr>
+          </tbody>
+        </table>
+        <p class="muted">ΔRGB ≈ ${f.delta_rgb != null ? f.delta_rgb : '—'} | ชนิดภาพ: ${a.type || '—'}</p>
+      `;
+    } else {
+      html += `<p class="muted">ไม่พบสูตรสีในฐานข้อมูลที่ใกล้เคียง</p>`;
+    }
+
+    document.getElementById('mixOut').innerHTML = html;
+  } catch (err) {
+    console.error(err);
+    alert('⚠️ เชื่อมต่อเซิร์ฟเวอร์ไม่ได้: ' + err.message);
+  }
+}
+
+// 🎯 เมื่อผู้ใช้เลือกไฟล์จากขั้นตอน "นำเข้าภาพ"
+document.getElementById('file').addEventListener('change', async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+
+  // แสดงภาพใน <canvas>
+  img.onload = () => {
+    drawImageScaled(img);
+    sel = null;
+    wbGain = { r: 1, g: 1, b: 1 };
+    updateKV();
+  };
+  img.src = URL.createObjectURL(f);
+
+  // ส่งไฟล์ให้ backend วิเคราะห์
+  sendToBackend(f);
+});
+
+</script>
+
+
+</script>
+</body>
+</html>
