@@ -1,0 +1,9 @@
+==== Training completed ====
+Date: 2025-10-08 17:05:43
+Model: mobilenet
+Classes: Beige, Black, Blue, Brown, Gold, Gray, Green, Grey, Orange, Pink, Purple, Red, Silver, Tan, White, Yellow
+Train samples: 8117
+Test samples: 1736
+Final Acc: 0.1451
+Val Acc: 0.1452
+========================================

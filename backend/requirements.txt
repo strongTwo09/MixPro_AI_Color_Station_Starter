@@ -1,0 +1,13 @@
+# Tested on Python 3.10
+Flask==3.0.3
+flask-cors==4.0.1
+Werkzeug==3.0.3
+Pillow==10.4.0
+numpy==1.26.4
+opencv-python==4.10.0.84
+tensorflow==2.15.1
+ultralytics==8.2.103
+scikit-learn==1.4.2
+pandas==2.2.2
+SQLAlchemy==2.0.31
+requests==2.32.3
